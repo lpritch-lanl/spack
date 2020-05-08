@@ -74,6 +74,7 @@ class PyTorch(PythonPackage, CudaPackage):
     variant('mkldnn', default=True, description='Enables use of MKLDNN')
     variant('nnpack', default=False, description='Enables NNPACK build')
     variant('qnnpack', default=False, description='Enables QNNPACK build (quantized 8-bit operators)')
+    variant('xnnpack', default=False, description='Enables XNNPACK build')
     variant('distributed', default=False, description='Enables distributed (c10d, gloo, mpi, etc.) build')
     variant('nccl', default=True, description='Use Spack-installed NCCL')
     variant('caffe2', default=False, description='Enables Caffe2 operators build')
@@ -94,6 +95,7 @@ class PyTorch(PythonPackage, CudaPackage):
     conflicts('+miopen', when='@:0.4')
     conflicts('+mkldnn', when='@:0.3')
     conflicts('+qnnpack', when='@:0.4')
+    conflicts('+xnnpack', when='@:1.4')
     conflicts('+nccl', when='~cuda')
     conflicts('+opencv', when='@:0.4')
     conflicts('+ffmpeg', when='@:0.4')
@@ -105,9 +107,6 @@ class PyTorch(PythonPackage, CudaPackage):
     conflicts('+tbb', when='@:1.1')
     # https://github.com/pytorch/pytorch/issues/35149
     conflicts('+fbgemm', when='@1.4.0')
-    # https://github.com/pytorch/pytorch/issues/35478
-    conflicts('%clang@11.0.3-apple',
-              msg='Apple Clang 11.0.3 segfaults at build-time')
 
     conflicts('cuda_arch=none', when='+cuda',
               msg='Must specify CUDA compute capabilities of your GPU, see '
@@ -125,7 +124,7 @@ class PyTorch(PythonPackage, CudaPackage):
     depends_on('py-future', when='@1.1: ^python@:2', type='build')
     depends_on('py-pyyaml', type=('build', 'run'))
     depends_on('py-typing', when='@0.4: ^python@:3.4', type=('build', 'run'))
-    depends_on('py-pybind11', when='@0.4:', type=('build', 'run'))
+    depends_on('py-pybind11', when='@0.4:', type=('build', 'link', 'run'))
     depends_on('blas')
     depends_on('lapack')
     depends_on('protobuf', when='@0.4:')
@@ -149,6 +148,8 @@ class PyTorch(PythonPackage, CudaPackage):
     # TODO: add dependency: https://github.com/Maratyszcza/NNPACK
     # depends_on('nnpack', when='+nnpack')
     depends_on('qnnpack', when='+qnnpack')
+    # TODO: add dependency: https://github.com/google/XNNPACK
+    # depends_on('xnnpack', when='+xnnpack')
     depends_on('mpi', when='+distributed')
     depends_on('nccl', when='+nccl')
     depends_on('gloo', when='+gloo')
@@ -165,6 +166,17 @@ class PyTorch(PythonPackage, CudaPackage):
     depends_on('py-hypothesis', type='test')
     depends_on('py-six', type='test')
     depends_on('py-psutil', type='test')
+
+    # https://github.com/pytorch/pytorch/pull/35607
+    # https://github.com/pytorch/pytorch/pull/37865
+    # Fixes CMake configuration error when XNNPACK is disabled
+    patch('xnnpack.patch', when='@1.5.0')
+
+    # https://github.com/pytorch/pytorch/pull/37086
+    # Fixes compilation with Clang 9.0.0 and Apple Clang 11.0.3
+    patch('https://github.com/pytorch/pytorch/commit/e921cd222a8fbeabf5a3e74e83e0d8dfb01aa8b5.patch',
+          sha256='7781c7ec0a661bf5a946a659f80e90df9dba116ad168762f15b10547113ae600',
+          when='@1.1:1.5')
 
     # Both build and install run cmake/make/make install
     # Only run once to speed up build times
@@ -239,6 +251,7 @@ class PyTorch(PythonPackage, CudaPackage):
 
         enable_or_disable('nnpack')
         enable_or_disable('qnnpack')
+        enable_or_disable('xnnpack')
         enable_or_disable('distributed')
 
         enable_or_disable('nccl')
